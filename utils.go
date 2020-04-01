@@ -41,7 +41,7 @@ func shift32ToGet4(x uint32, ind uint8) uint8 {
 	// Indexing must start at 1
 	return uint8((x << ((ind - 1) * 4)) >> (7 * 4))
 }
-func shift32ToGet16(x uint32, ind uint32) uint16 {
+func shift32ToGet16(x uint32, ind uint8) uint16 {
 	// Indexing must start at 1
 	return uint16(x<<((ind-1)*16)) >> (16)
 }

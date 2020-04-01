@@ -45,7 +45,7 @@ func (s seaturtleCipher) Encrypt(dst, src []byte) {
 		panic("seaturtle: output not full block")
 	}
 
-	encryptBlock(s.subkeys[:], dst, src)
+	cryptBlock(s.subkeys[:], dst, src, false)
 }
 
 func (s seaturtleCipher) Decrypt(dst, src []byte) {
@@ -57,5 +57,5 @@ func (s seaturtleCipher) Decrypt(dst, src []byte) {
 		panic("seaturtle: output not full block")
 	}
 
-	decryptBlock(s.subkeys[:], dst, src)
+	cryptBlock(s.subkeys[:], dst, src, true)
 }

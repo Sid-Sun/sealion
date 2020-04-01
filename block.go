@@ -4,16 +4,6 @@ import (
 	"encoding/binary"
 )
 
-// Encrypt one block from src into dst, using the subkeys.
-func encryptBlock(subkeys []uint32, dst, src []byte) {
-	cryptBlock(subkeys, dst, src, false)
-}
-
-// Decrypt one block from src into dst, using the subkeys.
-func decryptBlock(subkeys []uint32, dst, src []byte) {
-	cryptBlock(subkeys, dst, src, true)
-}
-
 func cryptBlock(subkeys []uint32, dst, src []byte, decrypt bool) {
 	var t uint64
 	left := binary.BigEndian.Uint64(src[0:8])
@@ -23,16 +13,19 @@ func cryptBlock(subkeys []uint32, dst, src []byte, decrypt bool) {
 		// Input Whitening
 		left = left ^ concatenate32(subkeys[0], subkeys[1])
 		right = right ^ concatenate32(subkeys[2], subkeys[3])
+
 		for i := 0; i < 16; i++ {
 			t = left
 			left_ := feistelFunction(left, subkeys[4+(i*3)]) ^ concatenate32(subkeys[5+(i*3)], subkeys[6+(i*3)])
 			left = left_ ^ right
 			right = t
 		}
+
 		// Undo Last Swap
 		t = left
 		left = right
 		right = t
+
 		// Output Whitening
 		left = left ^ concatenate32(subkeys[52], subkeys[53])
 		right = right ^ concatenate32(subkeys[54], subkeys[55])
@@ -44,10 +37,11 @@ func cryptBlock(subkeys []uint32, dst, src []byte, decrypt bool) {
 		// Perform 16 feistel rounds
 		for i := 0; i < 16; i++ {
 			t = left
-			left_ := feistelFunction(left, subkeys[49 +(i*-3)]) ^ concatenate32(subkeys[50 +(i*-3)], subkeys[51 +(i*-3)])
+			left_ := feistelFunction(left, subkeys[49+(i*-3)]) ^ concatenate32(subkeys[50+(i*-3)], subkeys[51+(i*-3)])
 			left = left_ ^ right
 			right = t
 		}
+
 		// Undo Last Swap
 		t = left
 		left = right
@@ -57,17 +51,20 @@ func cryptBlock(subkeys []uint32, dst, src []byte, decrypt bool) {
 		left = left ^ concatenate32(subkeys[0], subkeys[1])
 		right = right ^ concatenate32(subkeys[2], subkeys[3])
 	}
+
 	binary.BigEndian.PutUint64(dst[0:8], left)
 	binary.BigEndian.PutUint64(dst[8:16], right)
 }
 
 func feistelFunction(input uint64, p uint32) uint64 {
 	G1 := gFunction(input, p)
+
 	// Initial PHT without schedule
 	for x := 0; x < 4; x += 2 {
 		G1[x], G1[x+1] = pht8(G1[x], G1[x+1])
 		G1[x+4], G1[x+5] = pht8(G1[x+4], G1[x+5])
 	}
+
 	// PHT With Schedule
 	numberOfScheduledPHTLayers := 2
 	var intermediate [8]uint8
@@ -78,6 +75,7 @@ func feistelFunction(input uint64, p uint32) uint64 {
 		}
 		G1 = intermediate
 	}
+
 	return binary.BigEndian.Uint64(G1[:])
 }
 
@@ -116,142 +114,92 @@ func gFunction(input uint64, p uint32) [8]uint8 {
 }
 
 func (s seaturtleCipher) generateSubKeys(key []byte) {
-	numberOfWordsForInitialKey := len(key) / 4 // Number of 32 bit words needed for initial key (4,6 or 8)
+	uint32KeyWordsCount := len(key) / 4 // Number of 32 bit words needed for initial key (4,6 or 8)
 	nextPiWord := 0
+
 	// Put the initial key in SubKeys after XOR with a word of PI
-	for i := 0; i < numberOfWordsForInitialKey; i++ {
+	for i := 0; i < uint32KeyWordsCount; i++ {
 		s.subkeys[i] = binary.BigEndian.Uint32(key[i*4:(i*4)+4]) ^ pi[nextPiWord]
 		nextPiWord++
 	}
-	switch numberOfWordsForInitialKey {
-	// TODO: Convert Different KeySchedules to a single, generic one
+
+	var numberOfRounds, gFuncCount, uint16KeyWordsCount int
+
+	uint16KeyWordsCount = uint32KeyWordsCount * 2
+	gFuncCount = 1 // How many G Functions to be run in a Round
+
+	switch uint32KeyWordsCount {
 	case 4:
 		// 128 Bit Key Schedule Rounds
-		numberOfRounds := 13
-		for i := 0; i < numberOfRounds; i++ {
-			G1 := gFunction(concatenate32(s.subkeys[i*4], s.subkeys[(i*4)+1]), pi[nextPiWord])
-			nextPiWord++
-			var pArray [8]uint16
-			// Initialize P Array
-			pArray[0] = concatenate8ToGet16(G1[0], G1[1])
-			pArray[1] = concatenate8ToGet16(G1[2], G1[3])
-			pArray[2] = concatenate8ToGet16(G1[4], G1[5])
-			pArray[3] = concatenate8ToGet16(G1[6], G1[7])
-			pArray[4] = shift32ToGet16(s.subkeys[(i*4)+2], 1)
-			pArray[5] = shift32ToGet16(s.subkeys[(i*4)+2], 2)
-			pArray[6] = shift32ToGet16(s.subkeys[(i*4)+3], 1)
-			pArray[7] = shift32ToGet16(s.subkeys[(i*4)+3], 2)
-			// Initial PHT without schedule
-			for x := 0; x < 8; x += 2 {
-				pArray[x], pArray[x+1] = pht16(pArray[x], pArray[x+1])
-			}
-			// PHT With Schedule
-			numberOfScheduledPHTLayers := numberOfWordsForInitialKey / 2
-			var intermediate [8]uint16
-			for j := 0; j < numberOfScheduledPHTLayers; j++ {
-				for x := 0; x < 4; x += 2 {
-					intermediate[x], intermediate[x+1] = pht16(pArray[x*2], pArray[(x+1)*2])
-					intermediate[x+4], intermediate[x+5] = pht16(pArray[1+(x*2)], pArray[1+((x+1)*2)])
-				}
-				pArray = intermediate
-			}
-			nextKeyWord := 4 + (i * 4)
-			for i := 0; i < 8; i += 2 {
-				s.subkeys[nextKeyWord] = concatenate16ToGet32(pArray[i], pArray[i+1])
-				nextKeyWord++
-			}
-		}
+		numberOfRounds = 13
 	case 6:
 		// 192 Bit Key Schedule Rounds
-		numberOfRounds := 9
-		for i := 0; i < numberOfRounds; i++ {
-			G1 := gFunction(concatenate32(s.subkeys[i*6], s.subkeys[(i*6)+1]), pi[nextPiWord])
-			nextPiWord++
-			G2 := gFunction(concatenate32(s.subkeys[4+(i*6)], s.subkeys[5+(i*6)]), pi[nextPiWord])
-			nextPiWord++
-			var pArray [12]uint16
-			// Initialize P Array
-			pArray[0] = concatenate8ToGet16(G1[0], G1[1])
-			pArray[1] = concatenate8ToGet16(G1[2], G1[3])
-			pArray[2] = concatenate8ToGet16(G1[4], G1[5])
-			pArray[3] = concatenate8ToGet16(G1[6], G1[7])
-			pArray[4] = shift32ToGet16(s.subkeys[(i*6)+2], 1)
-			pArray[5] = shift32ToGet16(s.subkeys[(i*6)+2], 2)
-			pArray[6] = shift32ToGet16(s.subkeys[(i*6)+3], 1)
-			pArray[7] = shift32ToGet16(s.subkeys[(i*6)+3], 2)
-			pArray[8] = concatenate8ToGet16(G2[0], G2[1])
-			pArray[9] = concatenate8ToGet16(G2[2], G2[3])
-			pArray[10] = concatenate8ToGet16(G2[4], G2[5])
-			pArray[11] = concatenate8ToGet16(G2[6], G2[7])
-			// Initial PHT without schedule
-			for x := 0; x < 12; x += 2 {
-				pArray[x], pArray[x+1] = pht16(pArray[x], pArray[x+1])
-			}
-			// PHT With Schedule
-			numberOfScheduledPHTLayers := numberOfWordsForInitialKey / 2
-			var intermediate [12]uint16
-			for j := 0; j < numberOfScheduledPHTLayers; j++ {
-				for x := 0; x < 6; x += 2 {
-					intermediate[x], intermediate[x+1] = pht16(pArray[x*2], pArray[(x+1)*2])
-					intermediate[x+6], intermediate[x+7] = pht16(pArray[1+(x*2)], pArray[1+((x+1)*2)])
-				}
-				pArray = intermediate
-			}
-			nextKeyWord := 6 + (i * 6)
-			for i := 0; i < 12; i += 2 {
-				if !(nextKeyWord > 56) { // 192 Bit KeySchedule generates more subkeys than necessary, ensure they are not added
-					s.subkeys[nextKeyWord] = concatenate16ToGet32(pArray[i], pArray[i+1])
-					nextKeyWord++
-				} else {
-					break
-				}
-			}
-		}
+		numberOfRounds = 9
 	case 8:
 		// 256 Bit Key Schedule Rounds
-		numberOfRounds := 6
-		for i := 0; i < numberOfRounds; i++ {
-			G1 := gFunction(concatenate32(s.subkeys[i*8], s.subkeys[(i*8)+1]), pi[nextPiWord])
+		numberOfRounds = 6
+	}
+
+	if uint32KeyWordsCount > 4 {
+		gFuncCount = 2
+	}
+
+	for i := 0; i < numberOfRounds; i++ {
+
+		G := make([][8]uint8, gFuncCount)
+		G[0] = gFunction(concatenate32(s.subkeys[i*uint32KeyWordsCount], s.subkeys[(i*uint32KeyWordsCount)+1]), pi[nextPiWord])
+		nextPiWord++
+		if gFuncCount == 2 {
+			G[1] = gFunction(concatenate32(s.subkeys[4+(i*uint32KeyWordsCount)], s.subkeys[5+(i*uint32KeyWordsCount)]), pi[nextPiWord])
 			nextPiWord++
-			G2 := gFunction(concatenate32(s.subkeys[4+(i*8)], s.subkeys[5+(i*8)]), pi[nextPiWord])
-			nextPiWord++
-			var pArray [16]uint16
-			// Initialize P Array
-			pArray[0] = concatenate8ToGet16(G1[0], G1[1])
-			pArray[1] = concatenate8ToGet16(G1[2], G1[3])
-			pArray[2] = concatenate8ToGet16(G1[4], G1[5])
-			pArray[3] = concatenate8ToGet16(G1[6], G1[7])
-			pArray[4] = shift32ToGet16(s.subkeys[(i*8)+2], 1)
-			pArray[5] = shift32ToGet16(s.subkeys[(i*8)+2], 2)
-			pArray[6] = shift32ToGet16(s.subkeys[(i*8)+3], 1)
-			pArray[7] = shift32ToGet16(s.subkeys[(i*8)+3], 2)
-			pArray[8] = concatenate8ToGet16(G2[0], G2[1])
-			pArray[9] = concatenate8ToGet16(G2[2], G2[3])
-			pArray[10] = concatenate8ToGet16(G2[4], G2[5])
-			pArray[11] = concatenate8ToGet16(G2[6], G2[7])
-			pArray[12] = shift32ToGet16(s.subkeys[(i*8)+6], 1)
-			pArray[13] = shift32ToGet16(s.subkeys[(i*8)+6], 2)
-			pArray[14] = shift32ToGet16(s.subkeys[(i*8)+7], 1)
-			pArray[15] = shift32ToGet16(s.subkeys[(i*8)+7], 2)
-			// Initial PHT without schedule
-			for x := 0; x < 16; x += 2 {
-				pArray[x], pArray[x+1] = pht16(pArray[x], pArray[x+1])
-			}
-			// PHT With Schedule
-			numberOfScheduledPHTLayers := numberOfWordsForInitialKey / 2
-			var intermediate [16]uint16
-			for j := 0; j < numberOfScheduledPHTLayers; j++ {
-				for x := 0; x < 8; x += 2 {
-					intermediate[x], intermediate[x+1] = pht16(pArray[x*2], pArray[(x+1)*2])
-					intermediate[x+8], intermediate[x+9] = pht16(pArray[1+(x*2)], pArray[1+((x+1)*2)])
+		}
+
+		pArray := make([]uint16, uint16KeyWordsCount)
+
+		// Initialize P Array
+		m, n := 0, 0
+		for i := 0; i < uint32KeyWordsCount; i++ {
+			switch i {
+			case 0, 1, 2, 3, 8, 9, 10, 11:
+				pArray[i] = concatenate8ToGet16(G[m][n], G[m][n+1])
+				n += 2
+				if n > 6 {
+					m += 1
+					n = 0
 				}
-				pArray = intermediate
+			case 4, 6, 12, 14:
+				pArray[i] = shift32ToGet16(s.subkeys[(i*uint32KeyWordsCount)+(i/2)], 1)
+				pArray[i+1] = shift32ToGet16(s.subkeys[(i*uint32KeyWordsCount)+(i/2)], 2)
+				i++ // Skip next iteration since we processed for it already
 			}
-			nextKeyWord := 8 + (i * 8)
-			for i := 0; i < 16; i += 2 {
-				s.subkeys[nextKeyWord] = concatenate16ToGet32(pArray[i], pArray[i+1])
-				nextKeyWord++
+		}
+
+		// Initial PHT without schedule
+		for x := 0; x < uint16KeyWordsCount; x += 2 {
+			pArray[x], pArray[x+1] = pht16(pArray[x], pArray[x+1])
+		}
+
+		// PHT With Schedule
+		numberOfScheduledPHTLayers := uint32KeyWordsCount / 2
+
+		//var intermediate [16]uint16
+		intermediate := make([]uint16, uint16KeyWordsCount)
+
+		for j := 0; j < numberOfScheduledPHTLayers; j++ {
+			for x := 0; x < (uint16KeyWordsCount / 2); x += 2 {
+				intermediate[x], intermediate[x+1] = pht16(pArray[x*2], pArray[(x+1)*2])
+				intermediate[x+(uint16KeyWordsCount/2)], intermediate[x+1+(uint16KeyWordsCount/2)] = pht16(pArray[1+(x*2)], pArray[1+((x+1)*2)])
 			}
+			pArray = intermediate
+		}
+
+		nextKeyWord := uint32KeyWordsCount + (i * uint32KeyWordsCount)
+		for j := 0; j < uint16KeyWordsCount; j += 2 {
+			if nextKeyWord > 55 { // 192 Bit KeySchedule generates more subkeys than necessary, ensure they are not added
+				break
+			}
+			s.subkeys[nextKeyWord] = concatenate16ToGet32(pArray[j], pArray[j+1])
+			nextKeyWord++
 		}
 	}
 }
