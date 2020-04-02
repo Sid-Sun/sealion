@@ -160,19 +160,19 @@ func (s *Cipher) generateSubKeys(key []byte) {
 
 		// Initialize P Array
 		m, n := 0, 0
-		for i := 0; i < uint32KeyWordsCount; i++ {
-			switch i {
+		for j := 0; j < uint16KeyWordsCount; j++ {
+			switch j {
 			case 0, 1, 2, 3, 8, 9, 10, 11:
-				pArray[i] = concatenate8ToGet16(G[m][n], G[m][n+1])
+				pArray[j] = concatenate8ToGet16(G[m][n], G[m][n+1])
 				n += 2
 				if n > 6 {
 					m += 1
 					n = 0
 				}
 			case 4, 6, 12, 14:
-				pArray[i] = shift32ToGet16(s.subkeys[(i*uint32KeyWordsCount)+(i/2)], 1)
-				pArray[i+1] = shift32ToGet16(s.subkeys[(i*uint32KeyWordsCount)+(i/2)], 2)
-				i++ // Skip next iteration since we processed for it already
+				pArray[j] = shift32ToGet16(s.subkeys[(i*uint32KeyWordsCount)+(j/2)], 1)
+				pArray[j+1] = shift32ToGet16(s.subkeys[(i*uint32KeyWordsCount)+(j/2)], 2)
+				j++ // Skip next iteration since we processed for it already
 			}
 		}
 
@@ -186,6 +186,7 @@ func (s *Cipher) generateSubKeys(key []byte) {
 
 		//var intermediate [16]uint16
 		intermediate := make([]uint16, uint16KeyWordsCount)
+
 
 		for j := 0; j < numberOfScheduledPHTLayers; j++ {
 			for x := 0; x < (uint16KeyWordsCount / 2); x += 2 {
