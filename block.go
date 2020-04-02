@@ -187,13 +187,12 @@ func (s *Cipher) generateSubKeys(key []byte) {
 		//var intermediate [16]uint16
 		intermediate := make([]uint16, uint16KeyWordsCount)
 
-
 		for j := 0; j < numberOfScheduledPHTLayers; j++ {
-			for x := 0; x < (uint16KeyWordsCount / 2); x += 2 {
+			for x := 0; x < uint32KeyWordsCount; x += 2 {
 				intermediate[x], intermediate[x+1] = pht16(pArray[x*2], pArray[(x+1)*2])
-				intermediate[x+(uint16KeyWordsCount/2)], intermediate[x+1+(uint16KeyWordsCount/2)] = pht16(pArray[1+(x*2)], pArray[1+((x+1)*2)])
+				intermediate[x+uint32KeyWordsCount], intermediate[x+1+uint32KeyWordsCount] = pht16(pArray[1+(x*2)], pArray[1+((x+1)*2)])
 			}
-			pArray = intermediate
+			copy(pArray, intermediate)
 		}
 
 		nextKeyWord := uint32KeyWordsCount + (i * uint32KeyWordsCount)
