@@ -1,11 +1,10 @@
 package seaturtle
 
 import (
-	"crypto/cipher"
 	"strconv"
 )
 
-type seaturtleCipher struct {
+type Cipher struct {
 	subkeys [56]uint32
 }
 
@@ -17,7 +16,7 @@ func (k KeySizeError) Error() string {
 	return "seaturtle: invalid key size " + strconv.Itoa(int(k))
 }
 
-func NewCipher(key []byte) (cipher.Block, error) {
+func NewCipher(key []byte) (*Cipher, error) {
 
 	switch len(key) {
 	case 16, 24, 32:
@@ -26,36 +25,28 @@ func NewCipher(key []byte) (cipher.Block, error) {
 		return nil, KeySizeError(len(key))
 	}
 
-	c := new(seaturtleCipher)
+	c := new(Cipher)
 	c.generateSubKeys(key)
 
 	return c, nil
 }
 
-func (s seaturtleCipher) BlockSize() int {
+func (s *Cipher) BlockSize() int {
 	return BlockSize
 }
 
-func (s seaturtleCipher) Encrypt(dst, src []byte) {
+func (s *Cipher) Encrypt(src []byte) []byte {
 	if len(src) < BlockSize {
 		panic("seaturtle: input not full block")
 	}
 
-	if len(dst) < BlockSize {
-		panic("seaturtle: output not full block")
-	}
-
-	cryptBlock(s.subkeys[:], dst, src, false)
+	return cryptBlock(s.subkeys[:], src, false)
 }
 
-func (s seaturtleCipher) Decrypt(dst, src []byte) {
+func (s *Cipher) Decrypt(src []byte) []byte {
 	if len(src) < BlockSize {
 		panic("seaturtle: input not full block")
 	}
 
-	if len(dst) < BlockSize {
-		panic("seaturtle: output not full block")
-	}
-
-	cryptBlock(s.subkeys[:], dst, src, true)
+	return cryptBlock(s.subkeys[:], src, true)
 }
