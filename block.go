@@ -4,8 +4,7 @@ import (
 	"encoding/binary"
 )
 
-func cryptBlock(subkeys []uint32, src []byte, decrypt bool) []byte {
-	dst := make([]byte, 16)
+func cryptBlock(subkeys []uint32, dst, src []byte, decrypt bool) {
 	var t uint64
 	left := binary.BigEndian.Uint64(src[0:8])
 	right := binary.BigEndian.Uint64(src[8:16])
@@ -55,7 +54,6 @@ func cryptBlock(subkeys []uint32, src []byte, decrypt bool) []byte {
 
 	binary.BigEndian.PutUint64(dst[0:8], left)
 	binary.BigEndian.PutUint64(dst[8:16], right)
-	return dst
 }
 
 func feistelFunction(input uint64, p uint32) uint64 {
@@ -115,7 +113,7 @@ func gFunction(input uint64, p uint32) [8]uint8 {
 	}
 }
 
-func (s *Cipher) generateSubKeys(key []byte) {
+func (s seaTurtleCipher) generateSubKeys(key []byte) {
 	uint32KeyWordsCount := len(key) / 4 // Number of 32 bit words needed for initial key (4,6 or 8)
 	nextPiWord := 0
 

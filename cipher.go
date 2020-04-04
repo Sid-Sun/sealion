@@ -1,10 +1,11 @@
 package seaturtle
 
 import (
+	"crypto/cipher"
 	"strconv"
 )
 
-type Cipher struct {
+type seaTurtleCipher struct {
 	subkeys [56]uint32
 }
 
@@ -16,7 +17,7 @@ func (k KeySizeError) Error() string {
 	return "seaturtle: invalid key size " + strconv.Itoa(int(k))
 }
 
-func NewCipher(key []byte) (*Cipher, error) {
+func NewCipher(key []byte) (cipher.Block, error) {
 
 	switch len(key) {
 	case 16, 24, 32:
@@ -25,28 +26,26 @@ func NewCipher(key []byte) (*Cipher, error) {
 		return nil, KeySizeError(len(key))
 	}
 
-	c := new(Cipher)
+	c := new(seaTurtleCipher)
 	c.generateSubKeys(key)
 
 	return c, nil
 }
 
-func (s *Cipher) BlockSize() int {
+func (s seaTurtleCipher) BlockSize() int {
 	return BlockSize
 }
 
-func (s *Cipher) Encrypt(src []byte) []byte {
+func (s seaTurtleCipher) Encrypt(dst, src []byte) {
 	if len(src) < BlockSize {
 		panic("seaturtle: input not full block")
 	}
-
-	return cryptBlock(s.subkeys[:], src, false)
+	cryptBlock(s.subkeys[:], dst, src, false)
 }
 
-func (s *Cipher) Decrypt(src []byte) []byte {
+func (s seaTurtleCipher) Decrypt(dst, src []byte) {
 	if len(src) < BlockSize {
 		panic("seaturtle: input not full block")
 	}
-
-	return cryptBlock(s.subkeys[:], src, true)
+	cryptBlock(s.subkeys[:], dst, src, true)
 }
