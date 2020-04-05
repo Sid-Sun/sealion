@@ -73,7 +73,7 @@ func feistelFunction(input uint64, p uint32) uint64 {
 			intermediate[x], intermediate[x+1] = pht8(G1[x*2], G1[(x+1)*2])
 			intermediate[x+4], intermediate[x+5] = pht8(G1[1+(x*2)], G1[1+((x+1)*2)])
 		}
-		G1 = intermediate
+		copy(G1[:], intermediate[:])
 	}
 
 	return binary.BigEndian.Uint64(G1[:])
@@ -140,7 +140,7 @@ func (s seaTurtleCipher) generateSubKeys(key []byte) {
 		numberOfRounds = 6
 	}
 
-	if uint32KeyWordsCount > 4 {
+	if uint32KeyWordsCount > 4 { // 192 or 256 Bit KS
 		gFuncCount = 2
 	}
 
@@ -175,8 +175,9 @@ func (s seaTurtleCipher) generateSubKeys(key []byte) {
 		}
 
 		// Initial PHT without schedule
-		for x := 0; x < uint16KeyWordsCount; x += 2 {
+		for x := 0; x < uint32KeyWordsCount; x += 2 {
 			pArray[x], pArray[x+1] = pht16(pArray[x], pArray[x+1])
+			pArray[x+uint32KeyWordsCount], pArray[x+1+uint32KeyWordsCount] = pht16(pArray[x+uint32KeyWordsCount], pArray[x+1+uint32KeyWordsCount])
 		}
 
 		// PHT With Schedule
