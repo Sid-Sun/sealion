@@ -113,13 +113,14 @@ func gFunction(input uint64, p uint32) [8]uint8 {
 	}
 }
 
-func (s seaTurtleCipher) generateSubKeys(key []byte) {
+func generateSubKeys(key []byte) [56]uint32 {
+	var subkeys [56]uint32
 	uint32KeyWordsCount := len(key) / 4 // Number of 32 bit words needed for initial key (4,6 or 8)
 	nextPiWord := 0
 
 	// Put the initial key in SubKeys after XOR with a word of PI
 	for i := 0; i < uint32KeyWordsCount; i++ {
-		s.subkeys[i] = binary.BigEndian.Uint32(key[i*4:(i*4)+4]) ^ pi[nextPiWord]
+		subkeys[i] = binary.BigEndian.Uint32(key[i*4:(i*4)+4]) ^ pi[nextPiWord]
 		nextPiWord++
 	}
 
@@ -147,10 +148,10 @@ func (s seaTurtleCipher) generateSubKeys(key []byte) {
 	for i := 0; i < numberOfRounds; i++ {
 
 		G := make([][8]uint8, gFuncCount)
-		G[0] = gFunction(concatenate32(s.subkeys[i*uint32KeyWordsCount], s.subkeys[(i*uint32KeyWordsCount)+1]), pi[nextPiWord])
+		G[0] = gFunction(concatenate32(subkeys[i*uint32KeyWordsCount], subkeys[(i*uint32KeyWordsCount)+1]), pi[nextPiWord])
 		nextPiWord++
 		if gFuncCount == 2 {
-			G[1] = gFunction(concatenate32(s.subkeys[4+(i*uint32KeyWordsCount)], s.subkeys[5+(i*uint32KeyWordsCount)]), pi[nextPiWord])
+			G[1] = gFunction(concatenate32(subkeys[4+(i*uint32KeyWordsCount)], subkeys[5+(i*uint32KeyWordsCount)]), pi[nextPiWord])
 			nextPiWord++
 		}
 
@@ -168,8 +169,8 @@ func (s seaTurtleCipher) generateSubKeys(key []byte) {
 					n = 0
 				}
 			case 4, 6, 12, 14:
-				pArray[j] = shift32ToGet16(s.subkeys[(i*uint32KeyWordsCount)+(j/2)], 1)
-				pArray[j+1] = shift32ToGet16(s.subkeys[(i*uint32KeyWordsCount)+(j/2)], 2)
+				pArray[j] = shift32ToGet16(subkeys[(i*uint32KeyWordsCount)+(j/2)], 1)
+				pArray[j+1] = shift32ToGet16(subkeys[(i*uint32KeyWordsCount)+(j/2)], 2)
 				j++ // Skip next iteration since we processed for it already
 			}
 		}
@@ -199,8 +200,9 @@ func (s seaTurtleCipher) generateSubKeys(key []byte) {
 			if nextKeyWord > 55 { // 192 Bit KeySchedule generates more subkeys than necessary, ensure they are not added
 				break
 			}
-			s.subkeys[nextKeyWord] = concatenate16ToGet32(pArray[j], pArray[j+1])
+			subkeys[nextKeyWord] = concatenate16ToGet32(pArray[j], pArray[j+1])
 			nextKeyWord++
 		}
 	}
+	return subkeys
 }

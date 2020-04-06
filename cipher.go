@@ -27,7 +27,7 @@ func NewCipher(key []byte) (cipher.Block, error) {
 	}
 
 	c := new(seaTurtleCipher)
-	c.generateSubKeys(key)
+	c.subkeys = generateSubKeys(key)
 
 	return c, nil
 }
