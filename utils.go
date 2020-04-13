@@ -1,4 +1,4 @@
-package seaturtle
+package sealion
 
 func pht8(a byte, b byte) (byte, byte) {
 	a = (a + b) % byte(255)
@@ -24,12 +24,8 @@ func concatenate32(a uint32, b uint32) uint64 {
 	return (uint64(a) << 32) | uint64(b)
 }
 
-func rotate16byN(x uint16, N uint8, ShiftRight bool) uint16 {
-	if ShiftRight {
-		return x>>N | x<<(16-N)
-	} else {
-		return x<<N | x>>(16-N)
-	}
+func rotate16RightBy4(x *uint16) {
+	*x = (*x)>>4 | (*x)<<(12)
 }
 
 func shift16ToGet8(x uint16, ind uint8) uint8 {
