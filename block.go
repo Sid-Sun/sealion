@@ -11,12 +11,12 @@ func cryptBlock(subkeys [40]uint32, dst, src []byte, decrypt bool) {
 
 	if !decrypt {
 		// Input Whitening
-		left = left ^ concatenate32(subkeys[0], subkeys[1])
-		right = right ^ concatenate32(subkeys[2], subkeys[3])
+		left = left ^ concatenate32(&subkeys[0], &subkeys[1])
+		right = right ^ concatenate32(&subkeys[2], &subkeys[3])
 
 		for i := 0; i < 16; i++ {
 			t = left
-			left_ := feistelFunction(left) ^ concatenate32(subkeys[4+(i*2)], subkeys[5+(i*2)])
+			left_ := feistelFunction(left) ^ concatenate32(&subkeys[4+(i*2)], &subkeys[5+(i*2)])
 			left = left_ ^ right
 			right = t
 		}
@@ -27,17 +27,17 @@ func cryptBlock(subkeys [40]uint32, dst, src []byte, decrypt bool) {
 		right = t
 
 		// Output Whitening
-		left = left ^ concatenate32(subkeys[36], subkeys[37])
-		right = right ^ concatenate32(subkeys[38], subkeys[39])
+		left = left ^ concatenate32(&subkeys[36], &subkeys[37])
+		right = right ^ concatenate32(&subkeys[38], &subkeys[39])
 	} else {
 		// Input Whitening
-		left = left ^ concatenate32(subkeys[36], subkeys[37])
-		right = right ^ concatenate32(subkeys[38], subkeys[39])
+		left = left ^ concatenate32(&subkeys[36], &subkeys[37])
+		right = right ^ concatenate32(&subkeys[38], &subkeys[39])
 
 		// Perform 16 feistel rounds
 		for i := 0; i < 16; i++ {
 			t = left
-			left_ := feistelFunction(left) ^ concatenate32(subkeys[34+(i*-2)], subkeys[35+(i*-2)])
+			left_ := feistelFunction(left) ^ concatenate32(&subkeys[34+(i*-2)], &subkeys[35+(i*-2)])
 			left = left_ ^ right
 			right = t
 		}
@@ -47,9 +47,9 @@ func cryptBlock(subkeys [40]uint32, dst, src []byte, decrypt bool) {
 		left = right
 		right = t
 
-		// Output Whitening
-		left = left ^ concatenate32(subkeys[0], subkeys[1])
-		right = right ^ concatenate32(subkeys[2], subkeys[3])
+		// Output Whitening&
+		left = left ^ concatenate32(&subkeys[0], &subkeys[1])
+		right = right ^ concatenate32(&subkeys[2], &subkeys[3])
 	}
 
 	binary.BigEndian.PutUint64(dst[0:8], left)
@@ -61,8 +61,8 @@ func feistelFunction(input uint64) uint64 {
 
 	// Initial PHT without schedule
 	for x := 0; x < 4; x += 2 {
-		G1[x], G1[x+1] = pht8(G1[x], G1[x+1])
-		G1[x+4], G1[x+5] = pht8(G1[x+4], G1[x+5])
+		G1[x], G1[x+1] = pht8(&G1[x], &G1[x+1])
+		G1[x+4], G1[x+5] = pht8(&G1[x+4], &G1[x+5])
 	}
 
 	// PHT With Schedule
@@ -70,8 +70,8 @@ func feistelFunction(input uint64) uint64 {
 	var intermediate [8]uint8
 	for j := 0; j < numberOfScheduledPHTLayers; j++ {
 		for x := 0; x < 4; x += 2 {
-			intermediate[x], intermediate[x+1] = pht8(G1[x*2], G1[(x+1)*2])
-			intermediate[x+4], intermediate[x+5] = pht8(G1[1+(x*2)], G1[1+((x+1)*2)])
+			intermediate[x], intermediate[x+1] = pht8(&G1[x*2], &G1[(x+1)*2])
+			intermediate[x+4], intermediate[x+5] = pht8(&G1[1+(x*2)], &G1[1+((x+1)*2)])
 		}
 		copy(G1[:], intermediate[:])
 	}
@@ -95,10 +95,10 @@ func gFunction(input uint64) [8]uint8 {
 	// Do Expansion and then DDR with data p on four 16 bit blocks
 	// Expansion is performed by taking 1 byte each from corresponding s0, s2, s4, s6 and concatenating
 	// In case of s7, the second byte for concatenation is the first byte of s0
-	s1 = concatenate8ToGet16(shift16ToGet8(s0, 2), shift16ToGet8(s2, 1))
-	s3 = concatenate8ToGet16(shift16ToGet8(s2, 2), shift16ToGet8(s4, 1))
-	s5 = concatenate8ToGet16(shift16ToGet8(s4, 2), shift16ToGet8(s6, 1))
-	s7 = concatenate8ToGet16(shift16ToGet8(s6, 2), shift16ToGet8(s0, 1))
+	s1 = concatenate8ToGet16(shift16ToGet8(&s0, 2), shift16ToGet8(&s2, 1))
+	s3 = concatenate8ToGet16(shift16ToGet8(&s2, 2), shift16ToGet8(&s4, 1))
+	s5 = concatenate8ToGet16(shift16ToGet8(&s4, 2), shift16ToGet8(&s6, 1))
+	s7 = concatenate8ToGet16(shift16ToGet8(&s6, 2), shift16ToGet8(&s0, 1))
 	rotate16RightBy4(&s1)
 	rotate16RightBy4(&s3)
 	rotate16RightBy4(&s5)
@@ -106,14 +106,14 @@ func gFunction(input uint64) [8]uint8 {
 	return [8]uint8{
 		// There are 8 16:8 APN S Boxes
 		// For the corresponding array implementation, we need to split 16 bits into 8 bits
-		sBoxes[0][shift16ToGet8(s0, 1)][shift16ToGet8(s0, 2)],
-		sBoxes[1][shift16ToGet8(s1, 1)][shift16ToGet8(s1, 2)],
-		sBoxes[2][shift16ToGet8(s2, 1)][shift16ToGet8(s2, 2)],
-		sBoxes[3][shift16ToGet8(s3, 1)][shift16ToGet8(s3, 2)],
-		sBoxes[4][shift16ToGet8(s4, 1)][shift16ToGet8(s4, 2)],
-		sBoxes[5][shift16ToGet8(s5, 1)][shift16ToGet8(s5, 2)],
-		sBoxes[6][shift16ToGet8(s6, 1)][shift16ToGet8(s6, 2)],
-		sBoxes[7][shift16ToGet8(s7, 1)][shift16ToGet8(s7, 2)],
+		sBoxes[0][shift16ToGet8(&s0, 1)][shift16ToGet8(&s0, 2)],
+		sBoxes[1][shift16ToGet8(&s1, 1)][shift16ToGet8(&s1, 2)],
+		sBoxes[2][shift16ToGet8(&s2, 1)][shift16ToGet8(&s2, 2)],
+		sBoxes[3][shift16ToGet8(&s3, 1)][shift16ToGet8(&s3, 2)],
+		sBoxes[4][shift16ToGet8(&s4, 1)][shift16ToGet8(&s4, 2)],
+		sBoxes[5][shift16ToGet8(&s5, 1)][shift16ToGet8(&s5, 2)],
+		sBoxes[6][shift16ToGet8(&s6, 1)][shift16ToGet8(&s6, 2)],
+		sBoxes[7][shift16ToGet8(&s7, 1)][shift16ToGet8(&s7, 2)],
 	}
 }
 
@@ -152,9 +152,9 @@ func generateSubKeys(key []byte) [40]uint32 {
 	for i := 0; i < numberOfRounds; i++ {
 
 		G := make([][8]uint8, gFuncCount)
-		G[0] = gFunction(concatenate32(subkeys[i*uint32KeyWordsCount], subkeys[(i*uint32KeyWordsCount)+1]))
+		G[0] = gFunction(concatenate32(&subkeys[i*uint32KeyWordsCount], &subkeys[(i*uint32KeyWordsCount)+1]))
 		if gFuncCount == 2 {
-			G[1] = gFunction(concatenate32(subkeys[4+(i*uint32KeyWordsCount)], subkeys[5+(i*uint32KeyWordsCount)]))
+			G[1] = gFunction(concatenate32(&subkeys[4+(i*uint32KeyWordsCount)], &subkeys[5+(i*uint32KeyWordsCount)]))
 		}
 
 		pArray := make([]uint16, uint16KeyWordsCount)
@@ -171,16 +171,16 @@ func generateSubKeys(key []byte) [40]uint32 {
 					n = 0
 				}
 			case 4, 6, 12, 14:
-				pArray[j] = shift32ToGet16(subkeys[(i*uint32KeyWordsCount)+(j/2)], 1)
-				pArray[j+1] = shift32ToGet16(subkeys[(i*uint32KeyWordsCount)+(j/2)], 2)
+				pArray[j] = shift32ToGet16(&subkeys[(i*uint32KeyWordsCount)+(j/2)], 1)
+				pArray[j+1] = shift32ToGet16(&subkeys[(i*uint32KeyWordsCount)+(j/2)], 2)
 				j++ // Skip next iteration since we processed for it already
 			}
 		}
 
 		// Initial PHT without schedule
 		for x := 0; x < uint32KeyWordsCount; x += 2 {
-			pArray[x], pArray[x+1] = pht16(pArray[x], pArray[x+1])
-			pArray[x+uint32KeyWordsCount], pArray[x+1+uint32KeyWordsCount] = pht16(pArray[x+uint32KeyWordsCount], pArray[x+1+uint32KeyWordsCount])
+			pArray[x], pArray[x+1] = pht16(&pArray[x], &pArray[x+1])
+			pArray[x+uint32KeyWordsCount], pArray[x+1+uint32KeyWordsCount] = pht16(&pArray[x+uint32KeyWordsCount], &pArray[x+1+uint32KeyWordsCount])
 		}
 
 		// PHT With Schedule
@@ -191,8 +191,8 @@ func generateSubKeys(key []byte) [40]uint32 {
 
 		for j := 0; j < numberOfScheduledPHTLayers; j++ {
 			for x := 0; x < uint32KeyWordsCount; x += 2 {
-				intermediate[x], intermediate[x+1] = pht16(pArray[x*2], pArray[(x+1)*2])
-				intermediate[x+uint32KeyWordsCount], intermediate[x+1+uint32KeyWordsCount] = pht16(pArray[1+(x*2)], pArray[1+((x+1)*2)])
+				intermediate[x], intermediate[x+1] = pht16(&pArray[x*2], &pArray[(x+1)*2])
+				intermediate[x+uint32KeyWordsCount], intermediate[x+1+uint32KeyWordsCount] = pht16(&pArray[1+(x*2)], &pArray[1+((x+1)*2)])
 			}
 			copy(pArray, intermediate)
 		}
@@ -202,7 +202,7 @@ func generateSubKeys(key []byte) [40]uint32 {
 			if nextKeyWord > 39 { // 256 Bit KeySchedule generates more subkeys than necessary, ensure they are not added
 				break
 			}
-			subkeys[nextKeyWord] = concatenate16ToGet32(pArray[j], pArray[j+1])
+			subkeys[nextKeyWord] = concatenate16ToGet32(&pArray[j], &pArray[j+1])
 			nextKeyWord++
 		}
 	}
